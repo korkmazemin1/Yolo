@@ -7,17 +7,15 @@ Algoritma
 4-modelin katmanları ve çıktı katmanı alınır(output alınabilmesi için)
 5--model içe aktarılır ve resim girdi olarak verilir
 6- çıktı katmanındaki çıktılara göre kutucuk çizdirme ve skor yazdırma gibi işlemler yapılur
-"""
-"""
-!!!!!NOT: bu kod dosyası bazı eksikliklere sahiptir.
 
+# algoritmaya ek olarak NMS eklenmiştir
 """
 import cv2 
 import numpy as np 
-from random import randint
+from random import randint 
 
 #resim yükleme
-img=cv2.imread("img\\laptop.jpg")
+img=cv2.imread("img\\people.jpg")
 
 # resmin en ve boy bilgileri alınır
 img_width = img.shape[1]
@@ -66,6 +64,13 @@ model.setInput(img_blob)
 #çıktı katmanlarının içerisindeki değerleri çıkardık
 detection_layers= model.forward(output_layer)
 
+### NON MAXİMUM SUPRESSİON Adım 1###
+# Bu yöntem ile Sık şekilde gereksiz sayıda duran Bounding boxları (tespitleri) tek sayıya indiririz.
+ids_list= []
+boxes_list=[]
+confidence_list =[]
+### ---###
+
 for detection_layer in detection_layers:
     for object_detection in detection_layer:
         #güven skoruna erişildi
@@ -75,7 +80,7 @@ for detection_layer in detection_layers:
         # skorlar kaydedilir
         confidence=scores[predicted_id]     
 
-        if confidence >0.60:
+        if confidence >0.20:
             # tespit edile
             label = labels[predicted_id]
             #tespitin kordinatları resmin boyutları ile oranlanarak çekilir
@@ -89,26 +94,65 @@ for detection_layer in detection_layers:
             # merkez konumdan yükseklik çıkarılınca da başlangıç y kordinatı ortaya çıkar
             start_y = int (box_center_y-(box_height/2))
 
-            # son x kordinatı başlangıca en eklenerek bulunur
-            end_x = start_x+box_width
-            # son y kordinatına başlangıca yükseklik eklenerek bulunur
-            end_y = start_y + box_height
+            ### NON MAXIMUM SUPRESSION-ADIM 2 ###
+            # gerekli listeler doldurulur
 
-            # kutu rengi seçildi
-            box_color=colors[predicted_id]
+            # gerekli listeler doldurulur
+            ids_list.append(predicted_id)
+            confidence_list.append(float(confidence))
+            boxes_list.append([start_x,start_y,int(box_width),int(box_height)])
             
-            # kutu rengi liste halinde değişkene atılır
-            box_color=[int(each) for each in box_color]
+            ### --- ###
+
+            ### NON MAXIMUM SUPRESSION-ADIM 3 ###
+
+# NMS metodu ile en yüksek confidence a sahip olan kutuları dizi halinde geri döndürür-return
+max_ids = cv2.dnn.NMSBoxes(boxes_list,confidence_list,0.5,0.4)# optimal parametreler ile oynanabilir
 
 
-            label="{}: {:.2f}%".format(label,confidence*100)
-            print("predicted object {}".format(label))
+# maksimum id leri dönen for döngüsü
+for max_id in max_ids:
+   # listenin içerisindeki index değerini çekmek için:
+    print(max_id)
+    max_class_id=max_id
+    
+    # nesneye ait olan kutu çekildi
+    box=boxes_list[max_class_id]
+    print(box)
+    # box içerisindeki kutunun kordinat değerleri tek tek çekilir
+    start_x=box[0]
+    start_y=box[1]
+    box_width=box[2]
+    box_height=box[3]
+
+    predicted_id = ids_list[max_class_id]
+    # etiketle içerisinden malum nesnenin etiketi çekilir
+    label = labels[predicted_id]
+    # doğruluk değeride çekilir
+    confidence=confidence_list[max_class_id]
+
+    ### --- ###
+
+    # son x kordinatı başlangıca en eklenerek bulunur
+    end_x = start_x+box_width
+    # son y kordinatına başlangıca yükseklik eklenerek bulunur
+    end_y = start_y + box_height
+
+    # kutu rengi seçildi
+    box_color=colors[predicted_id]
+            
+     # kutu rengi liste halinde değişkene atılır
+    box_color=[int(each) for each in box_color]
 
 
-            # kordinatlara göre ve belirlenen renge göre kutu çizilir
-            cv2.rectangle(img,(start_x,start_y),(end_x,end_y),box_color,1)
+    label="{}: {:.2f}%".format(label,confidence*100)
+    print("predicted object {}".format(label))
 
-            cv2.putText(img,label,(start_x,start_y-10),cv2.FONT_HERSHEY_SIMPLEX,0.5,box_color,1)
+
+    # kordinatlara göre ve belirlenen renge göre kutu çizilir
+    cv2.rectangle(img,(start_x,start_y),(end_x,end_y),box_color,2)
+
+    cv2.putText(img,label,(start_x,start_y-10),cv2.FONT_HERSHEY_SIMPLEX,0.5,box_color,1)
 
 cv2.imshow("detection",img)
 cv2.waitKey(0)
